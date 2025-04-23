@@ -27,8 +27,11 @@
         <url/>
     </scm>
     <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <maven.resources.filtering.encoding>UTF-8</maven.resources.filtering.encoding>
         <java.version>17</java.version>
-    </properties>
+            </properties>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -74,7 +77,11 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
                 <configuration>
+                    <source>${java.version}</source>
+                    <target>${java.version}</target>
+                    <encoding>UTF-8</encoding>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
