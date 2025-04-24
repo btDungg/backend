@@ -1,9 +1,9 @@
 # Hướng dẫn chạy
-- Tạo csdl trong MySQL với tên là gscores_db
+- Tạo csdl trong MySQL (có thể có tên là gscores_db)
 - tuỳ chỉnh kết nối đến DB (MySQL) trong file 'application.properties'
-spring.datasource.url=jdbc:mysql://localhost:3306/gscores_db
-spring.datasource.username=${DB_USERNAME}
-spring.datasource.password=${DB_PASSWORD}
+    - spring.datasource.url=jdbc:mysql://localhost:3306/gscores_db
+    - spring.datasource.username=${DB_USERNAME}
+    - spring.datasource.password=${DB_PASSWORD}
 - mở terminal trong dự án. (./backend)
 - Chạy lệnh: 'mvn spring-boot:run' để khởi chạy chương trình
 - các endpoint để test: 
