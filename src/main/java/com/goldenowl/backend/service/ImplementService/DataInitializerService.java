@@ -1,6 +1,5 @@
 package com.goldenowl.backend.service.ImplementService;
 
-
 import com.goldenowl.backend.entity.Score;
 import com.goldenowl.backend.repository.ScoreRepository;
 import jakarta.annotation.PostConstruct;
@@ -8,264 +7,277 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.Resource; // Để đọc file từ classpath
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-
-
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets; // Chỉ định encoding UTF-8 khi đọc file
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap; // Dùng HashMap để lưu chỉ mục cột theo tên
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@Service // Đánh dấu đây là một Spring Service Bean
+@Service
 public class DataInitializerService {
 
     private static final Logger log = LoggerFactory.getLogger(DataInitializerService.class);
-    // Kích thước mỗi lô insert, điều chỉnh nếu cần để cân bằng tốc độ và bộ nhớ
-    private static final int BATCH_SIZE = 5000;
+    private static final int BATCH_SIZE = 1000; // Reduced batch size for Railway
 
-    @Autowired // Tiêm ScoreRepository để lưu dữ liệu
+    @Autowired
     private ScoreRepository scoreRepository;
 
-    // Lấy đường dẫn file CSV từ application.properties hoặc đặt cố định ở đây
     @Value("classpath:dataset/diem_thi_thpt_2024.csv")
-    private Resource csvDataFile; // Resource object để đọc file
+    private Resource csvDataFile;
 
-    @PostConstruct // Hàm này sẽ được gọi tự động sau khi DataInitializerService được tạo
+    @Value("${spring.profiles.active:default}")
+    private String activeProfile;
+
+    @Value("${app.data.import.enabled:true}")
+    private boolean dataImportEnabled;
+
+    @PostConstruct
     public void initializeData() {
-//        // --- Bước kiểm tra: Chỉ chạy nếu bảng scores chưa có dữ liệu ---
-//        if (scoreRepository.count() == 0) {
-//            log.info("CSDL đang trống. Bắt đầu khởi tạo dữ liệu từ CSV: {}", csvDataFile.getFilename());
-//            long startTime = System.currentTimeMillis(); // Bắt đầu tính giờ
-//            List<Score> batch = new ArrayList<>(BATCH_SIZE); // List để lưu các Score object cho mỗi lô
-//            int recordCount = 0; // Tổng số dòng đã đọc (bao gồm cả lỗi)
-//            int errorCount = 0; // Số dòng bị lỗi khi xử lý
-//
-//            // --- Bước đọc file CSV ---
-//            // Sử dụng try-with-resources để đảm bảo reader được đóng
-//            try (CSVReader reader = new CSVReader(new InputStreamReader(csvDataFile.getInputStream(), StandardCharsets.UTF_8))) {
-//                // Đọc dòng đầu tiên (dòng tiêu đề)
-//                String[] headers = reader.readNext();
-//                if (headers == null) {
-//                    log.error("File CSV trống hoặc thiếu dòng tiêu đề.");
-//                    return;
-//                }
-//
-//                // Tạo Map để lưu tên tiêu đề (chữ thường) và vị trí cột (chỉ mục)
-//                Map<String, Integer> headerMap = new HashMap<>();
-//                for (int i = 0; i < headers.length; i++) {
-//                    headerMap.put(headers[i].trim().toLowerCase(), i);
-//                }
-//
-//                // Kiểm tra sự tồn tại của cột SBD (quan trọng)
-//                if (!headerMap.containsKey("sbd")) {
-//                    log.error("Không tìm thấy cột bắt buộc 'sbd' trong tiêu đề CSV!");
-//                    throw new RuntimeException("Thiếu cột 'sbd' trong file CSV."); // Ném lỗi để dừng và rollback
-//                }
-//
-//                String[] line; // Mảng chứa dữ liệu của một dòng
-//                // Đọc từng dòng còn lại của file CSV
-//                while ((line = reader.readNext()) != null) {
-//                    recordCount++;
-//                    try {
-//                        // Lấy chỉ mục cột từ headerMap (dùng tên tiếng Việt từ CSV, viết thường)
-//                        Integer sbdIndex = headerMap.get("sbd");
-//                        Integer mathIndex = headerMap.get("toan");
-//                        Integer literatureIndex = headerMap.get("ngu_van");
-//                        Integer foreignLangIndex = headerMap.get("ngoai_ngu");
-//                        Integer physicsIndex = headerMap.get("vat_li");
-//                        Integer chemistryIndex = headerMap.get("hoa_hoc");
-//                        Integer biologyIndex = headerMap.get("sinh_hoc");
-//                        Integer historyIndex = headerMap.get("lich_su");
-//                        Integer geographyIndex = headerMap.get("dia_li");
-//                        Integer civicEduIndex = headerMap.get("gdcd");
-//                        Integer foreignLangCodeIndex = headerMap.get("ma_ngoai_ngu");
-//
-//                        // Lấy giá trị SBD, nếu trống thì bỏ qua dòng
-//                        String sbd = getStringValue(line, sbdIndex);
-//                        if (sbd == null || sbd.isEmpty()) {
-//                            log.warn("Bỏ qua dòng {} do thiếu hoặc SBD trống.", recordCount);
-//                            errorCount++;
-//                            continue; // Sang dòng tiếp theo
-//                        }
-//
-//                        // Parse các giá trị điểm (trả về null nếu lỗi hoặc trống)
-//                        Float math = parseFloatScore(line, mathIndex);
-//                        Float literature = parseFloatScore(line, literatureIndex);
-//                        Float foreignLanguage = parseFloatScore(line, foreignLangIndex);
-//                        Float physics = parseFloatScore(line, physicsIndex);
-//                        Float chemistry = parseFloatScore(line, chemistryIndex);
-//                        Float biology = parseFloatScore(line, biologyIndex);
-//                        Float history = parseFloatScore(line, historyIndex);
-//                        Float geography = parseFloatScore(line, geographyIndex);
-//                        Float civicEducation = parseFloatScore(line, civicEduIndex);
-//                        String foreignLanguageCode = getStringValue(line, foreignLangCodeIndex);
-//
-//                        // Tạo đối tượng Score Entity
-//                        // Chú ý thứ tự tham số phải khớp với constructor trong Score.java (nếu dùng)
-//                        // Hoặc dùng setter: score.setRegistrationNumber(sbd); score.setMath(math); ...
-//                        Score score = new Score();
-//                        score.setRegistrationNumber(sbd);
-//                        score.setMath(math);
-//                        score.setLiterature(literature);
-//                        score.setForeignLanguage(foreignLanguage);
-//                        score.setPhysics(physics);
-//                        score.setChemistry(chemistry);
-//                        score.setBiology(biology);
-//                        score.setHistory(history);
-//                        score.setGeography(geography);
-//                        score.setCivicEducation(civicEducation);
-//                        score.setForeignLanguageCode(foreignLanguageCode);
-//
-//                        batch.add(score); // Thêm vào lô hiện tại
-//
-//                        // --- Bước Lưu dữ liệu theo lô (Batch Insert) ---
-//                        if (batch.size() >= BATCH_SIZE) {
-//                            scoreRepository.saveAll(batch); // Lưu cả lô vào CSDL
-//                            batch.clear(); // Làm sạch lô để chuẩn bị cho lô tiếp theo
-//                            log.info("Đã lưu {} bản ghi... (Tổng đã xử lý: {})", BATCH_SIZE, recordCount);
-//                        }
-//                    } catch (Exception e) { // Bắt lỗi chung khi xử lý một dòng
-//                        log.error("Lỗi xử lý dòng {}: {} - Lỗi: {}", recordCount, String.join(",", line), e.getMessage(), e);
-//                        errorCount++;
-//                        // Bỏ qua dòng lỗi, tiếp tục xử lý các dòng khác
-//                    }
-//                } // Kết thúc vòng lặp while
-//
-//                // Lưu lô cuối cùng nếu còn dữ liệu
-//                if (!batch.isEmpty()) {
-//                    scoreRepository.saveAll(batch);
-//                    log.info("Đã lưu lô cuối cùng gồm {} bản ghi.", batch.size());
-//                }
-//
-//                long endTime = System.currentTimeMillis(); // Kết thúc tính giờ
-//                // Log tổng kết
-//                log.info("Hoàn tất khởi tạo dữ liệu. Tổng số dòng đã xử lý: {}. Lưu thành công: {}. Số dòng lỗi: {}. Thời gian thực hiện: {} ms",
-//                        recordCount, recordCount - errorCount, errorCount, (endTime - startTime));
-//
-//            } catch (IOException | CsvValidationException e) { // Bắt lỗi liên quan đến đọc file CSV
-//                log.error("Lỗi nghiêm trọng khi đọc file CSV: {}", csvDataFile.getFilename(), e);
-//                throw new RuntimeException("Không thể khởi tạo dữ liệu từ CSV. Kiểm tra file và cấu hình.", e);
-//            }
-//        } else {
-//            log.info("Dữ liệu đã tồn tại trong CSDL. Bỏ qua quá trình import từ CSV.");
-//        }
+        // Debug information about the CSV file
+        try {
+            log.info("Active profile: {}", activeProfile);
+            log.info("Data import enabled: {}", dataImportEnabled);
+            log.info("CSV file exists: {}", csvDataFile.exists());
+            log.info("CSV file path: {}", csvDataFile.getURI().toString());
+            log.info("CSV file readable: {}", csvDataFile.isReadable());
+            log.info("CSV file size: {} bytes", csvDataFile.contentLength());
+        } catch (IOException e) {
+            log.error("Error checking CSV file: {}", e.getMessage());
+        }
 
-        if (scoreRepository.count() > 0) {
-            log.info("Dữ liệu đã tồn tại trong CSDL. Bỏ qua quá trình import từ CSV.");
+        // Skip import if disabled or if data already exists
+        if (!dataImportEnabled) {
+            log.info("CSV data import disabled by configuration. Skipping.");
             return;
         }
 
-        log.info("Bắt đầu import dữ liệu từ file CSV: {}", csvDataFile.getFilename());
+        if (scoreRepository.count() > 0) {
+            log.info("Data already exists in the database. Skipping CSV import.");
+            return;
+        }
+
+        log.info("Starting data import from CSV: {}", csvDataFile.getFilename());
         long startTime = System.currentTimeMillis();
         int recordCount = 0;
+        int successCount = 0;
         int errorCount = 0;
 
         List<Score> batch = new ArrayList<>(BATCH_SIZE);
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(csvDataFile.getInputStream(), StandardCharsets.UTF_8))) {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(csvDataFile.getInputStream(), StandardCharsets.UTF_8))) {
+
             String headerLine = reader.readLine();
             if (headerLine == null) {
-                log.error("File CSV trống.");
+                log.error("CSV file is empty or cannot be read.");
                 return;
             }
 
+            // Process header row and create mapping
             String[] headers = headerLine.split(",");
             Map<String, Integer> headerMap = new HashMap<>();
             for (int i = 0; i < headers.length; i++) {
                 headerMap.put(headers[i].trim().toLowerCase(), i);
             }
 
+            // Validate essential columns exist
             if (!headerMap.containsKey("sbd")) {
-                throw new RuntimeException("Thiếu cột 'sbd' trong file CSV.");
+                log.error("Required column 'sbd' not found in CSV headers");
+                throw new RuntimeException("CSV format error: missing 'sbd' column");
             }
 
+            log.info("CSV header mapping: {}", headerMap);
+
+            // Process data rows
             String line;
             while ((line = reader.readLine()) != null) {
                 recordCount++;
-                String[] values = line.split(",", -1); // Giữ cả ô rỗng
-
                 try {
+                    // Split line into values - handle potential quotes or commas in values
+                    String[] values = parseCsvLine(line);
+
+                    // Skip if SBD is missing
                     String sbd = getStringValue(values, headerMap.get("sbd"));
                     if (sbd == null || sbd.isEmpty()) {
+                        log.warn("Row {} skipped: Missing SBD", recordCount);
                         errorCount++;
                         continue;
                     }
 
+                    // Create Score object
                     Score score = new Score();
                     score.setRegistrationNumber(sbd);
-                    score.setMath(parseFloatScore(values, headerMap.get("toan")));
-                    score.setLiterature(parseFloatScore(values, headerMap.get("ngu_van")));
-                    score.setForeignLanguage(parseFloatScore(values, headerMap.get("ngoai_ngu")));
-                    score.setPhysics(parseFloatScore(values, headerMap.get("vat_li")));
-                    score.setChemistry(parseFloatScore(values, headerMap.get("hoa_hoc")));
-                    score.setBiology(parseFloatScore(values, headerMap.get("sinh_hoc")));
-                    score.setHistory(parseFloatScore(values, headerMap.get("lich_su")));
-                    score.setGeography(parseFloatScore(values, headerMap.get("dia_li")));
-                    score.setCivicEducation(parseFloatScore(values, headerMap.get("gdcd")));
-                    score.setForeignLanguageCode(getStringValue(values, headerMap.get("ma_ngoai_ngu")));
+
+                    // Set scores from CSV
+                    setScoreField(score, "math", parseFloatScore(values, headerMap.get("toan")));
+                    setScoreField(score, "literature", parseFloatScore(values, headerMap.get("ngu_van")));
+                    setScoreField(score, "foreignLanguage", parseFloatScore(values, headerMap.get("ngoai_ngu")));
+                    setScoreField(score, "physics", parseFloatScore(values, headerMap.get("vat_li")));
+                    setScoreField(score, "chemistry", parseFloatScore(values, headerMap.get("hoa_hoc")));
+                    setScoreField(score, "biology", parseFloatScore(values, headerMap.get("sinh_hoc")));
+                    setScoreField(score, "history", parseFloatScore(values, headerMap.get("lich_su")));
+                    setScoreField(score, "geography", parseFloatScore(values, headerMap.get("dia_li")));
+                    setScoreField(score, "civicEducation", parseFloatScore(values, headerMap.get("gdcd")));
+
+                    // Set foreign language code if available
+                    Integer flCodeIndex = headerMap.get("ma_ngoai_ngu");
+                    if (flCodeIndex != null && flCodeIndex < values.length) {
+                        score.setForeignLanguageCode(getStringValue(values, flCodeIndex));
+                    }
 
                     batch.add(score);
+                    successCount++;
 
+                    // Save batch when it reaches size limit
                     if (batch.size() >= BATCH_SIZE) {
-                        scoreRepository.saveAll(batch);
-                        scoreRepository.flush(); // Xả bộ nhớ
-                        batch.clear();
-                    }
+                        saveAndClearBatch(batch);
 
-                    if (recordCount % 10000 == 0) {
-                        log.info("Đã xử lý {} dòng...", recordCount);
+                        // Log progress
+                        if (successCount % 10000 == 0) {
+                            long elapsedTime = System.currentTimeMillis() - startTime;
+                            log.info("Progress: {} records processed, {} successful, {} ms elapsed",
+                                    recordCount, successCount, elapsedTime);
+                        }
                     }
-
                 } catch (Exception e) {
+                    log.warn("Error processing row {}: {}", recordCount, e.getMessage());
                     errorCount++;
-                    log.warn("Dòng lỗi {}: {} - {}", recordCount, e.getMessage(), line);
                 }
             }
 
+            // Save any remaining records
             if (!batch.isEmpty()) {
-                scoreRepository.saveAll(batch);
-                scoreRepository.flush();
-                log.info("Đã lưu lô cuối cùng gồm {} bản ghi.", batch.size());
+                saveAndClearBatch(batch);
             }
 
-            long endTime = System.currentTimeMillis();
-            log.info("Hoàn tất. Tổng dòng: {}. Thành công: {}. Lỗi: {}. Thời gian: {} ms",
-                    recordCount, recordCount - errorCount, errorCount, (endTime - startTime));
+            long elapsedTime = System.currentTimeMillis() - startTime;
+            log.info("CSV import completed in {} ms. Total: {}, Success: {}, Errors: {}",
+                    elapsedTime, recordCount, successCount, errorCount);
 
         } catch (IOException e) {
-            log.error("Lỗi đọc file CSV: {}", e.getMessage(), e);
-            throw new RuntimeException("Không thể đọc file CSV.", e);
+            log.error("Error reading CSV file: {}", e.getMessage(), e);
+            throw new RuntimeException("Failed to read CSV data file", e);
+        } catch (Exception e) {
+            log.error("Unexpected error during data import: {}", e.getMessage(), e);
+            throw new RuntimeException("Data import failed", e);
         }
     }
 
-    // Hàm trợ giúp lấy giá trị String từ mảng, trả về null nếu chỉ mục không hợp lệ
-    private String getStringValue(String[] line, Integer index) {
-        if (index == null || index < 0 || index >= line.length || line[index] == null) {
-            return null;
-        }
-        return line[index].trim();
-    }
-
-    // Hàm trợ giúp parse String sang Float, trả về null nếu giá trị trống hoặc không hợp lệ
-    private Float parseFloatScore(String[] line, Integer index) {
-        String value = getStringValue(line, index);
-        if (value == null || value.isEmpty()) {
-            return null;
-        }
+    /**
+     * Save the current batch and clear the list
+     */
+    private void saveAndClearBatch(List<Score> batch) {
         try {
-            // Nếu điểm trong file CSV dùng dấu phẩy (,) thay vì chấm (.) thì bật dòng sau:
-            // value = value.replace(',', '.');
+            scoreRepository.saveAll(batch);
+            batch.clear();
+        } catch (Exception e) {
+            log.error("Error saving batch: {}", e.getMessage(), e);
+            // Don't clear batch on error - let it be saved on next attempt
+            throw e;
+        }
+    }
+
+    /**
+     * Parse a CSV line, handling quoted values that may contain commas
+     */
+    private String[] parseCsvLine(String line) {
+        List<String> values = new ArrayList<>();
+        boolean inQuotes = false;
+        StringBuilder currentValue = new StringBuilder();
+
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                values.add(currentValue.toString().trim());
+                currentValue = new StringBuilder();
+            } else {
+                currentValue.append(c);
+            }
+        }
+
+        // Add the last value
+        values.add(currentValue.toString().trim());
+
+        return values.toArray(new String[0]);
+    }
+
+    /**
+     * Helper method to get string value from array with index checking
+     */
+    private String getStringValue(String[] values, Integer index) {
+        if (index == null || index < 0 || index >= values.length) {
+            return null;
+        }
+        String value = values[index].trim();
+        return value.isEmpty() ? null : value;
+    }
+
+    /**
+     * Helper method to parse float score safely
+     */
+    private Float parseFloatScore(String[] values, Integer index) {
+        String value = getStringValue(values, index);
+        if (value == null) {
+            return null;
+        }
+
+        try {
+            // Handle both comma and period as decimal separators
+            value = value.replace(',', '.');
             return Float.parseFloat(value);
         } catch (NumberFormatException e) {
-            // Không ghi log ở đây để tránh quá nhiều log nếu file có nhiều lỗi định dạng
-            // log.warn("Could not parse float score from value '{}' at index {}. Returning null.", value, index != null ? index : "N/A");
+            // Return null for invalid values
             return null;
+        }
+    }
+
+    /**
+     * Helper method to set score field with validation
+     */
+    private void setScoreField(Score score, String fieldName, Float value) {
+        try {
+            switch (fieldName) {
+                case "math":
+                    score.setMath(value);
+                    break;
+                case "literature":
+                    score.setLiterature(value);
+                    break;
+                case "foreignLanguage":
+                    score.setForeignLanguage(value);
+                    break;
+                case "physics":
+                    score.setPhysics(value);
+                    break;
+                case "chemistry":
+                    score.setChemistry(value);
+                    break;
+                case "biology":
+                    score.setBiology(value);
+                    break;
+                case "history":
+                    score.setHistory(value);
+                    break;
+                case "geography":
+                    score.setGeography(value);
+                    break;
+                case "civicEducation":
+                    score.setCivicEducation(value);
+                    break;
+                default:
+                    log.warn("Unknown field name: {}", fieldName);
+            }
+        } catch (Exception e) {
+            log.warn("Error setting {}: {}", fieldName, e.getMessage());
         }
     }
 }
