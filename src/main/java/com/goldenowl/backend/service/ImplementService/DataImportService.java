@@ -100,6 +100,12 @@ public class DataImportService {
         processScore(values, headerMap, score, "toan", "math");
         processScore(values, headerMap, score, "ngu_van", "literature");
         processScore(values, headerMap, score, "ngoai_ngu", "foreignLanguage");
+        processScore(values, headerMap, score, "vat_li", "physics");
+        processScore(values, headerMap, score, "hoa_hoc", "chemistry");
+        processScore(values, headerMap, score, "sinh_hoc", "biology");
+        processScore(values, headerMap, score, "lich_su", "history");
+        processScore(values, headerMap, score, "dia_li", "geography");
+        processScore(values, headerMap, score, "gdcd", "civicEducation");
 
         String code = getValue(values, headerMap, "ma_ngoai_ngu");
         if (code != null && !code.isEmpty()) score.setForeignLanguageCode(code);
